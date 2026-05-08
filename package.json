@@ -1,6 +1,6 @@
 {
-  "name": "vscode-copy-reference",
-  "displayName": "Copy Code Reference",
+  "name": "copy-code-reference",
+  "displayName": "Copy @file Reference",
   "description": "Copy @file:line-range references to clipboard",
   "version": "0.1.0",
   "publisher": "manooog",
@@ -10,6 +10,9 @@
   },
   "categories": [
     "Other"
+  ],
+  "activationEvents": [
+    "onCommand:copyCodeReference.copy"
   ],
   "main": "./out/extension.js",
   "contributes": {
