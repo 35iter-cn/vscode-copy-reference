@@ -26,12 +26,12 @@ export function activate(context: vscode.ExtensionContext): void {
       filePath = document.uri.fsPath.replace(/\\/g, '/');
     }
 
-    // Format: @file:line or @file:start-end
+    // Format: @file#Lline or @file#Lstart-end
     let reference: string;
     if (startLine === endLine) {
-      reference = `@${filePath}:${startLine}`;
+      reference = `@${filePath}#L${startLine}`;
     } else {
-      reference = `@${filePath}:${startLine}-${endLine}`;
+      reference = `@${filePath}#L${startLine}-${endLine}`;
     }
 
     try {
