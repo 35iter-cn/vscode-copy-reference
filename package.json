@@ -3,14 +3,13 @@
   "displayName": "Copy Code Reference",
   "description": "Copy @file:line-range references to clipboard",
   "version": "0.1.0",
+  "publisher": "manooog",
+  "icon": "images/icon.png",
   "engines": {
-    "vscode": "^1.70.0"
+    "vscode": "^1.75.0"
   },
   "categories": [
     "Other"
-  ],
-  "activationEvents": [
-    "onCommand:copyCodeReference.copy"
   ],
   "main": "./out/extension.js",
   "contributes": {
