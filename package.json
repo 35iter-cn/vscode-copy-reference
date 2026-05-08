@@ -1,0 +1,41 @@
+{
+  "name": "vscode-copy-reference",
+  "displayName": "Copy Code Reference",
+  "description": "Copy @file:line-range references to clipboard",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:copyCodeReference.copy"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copyCodeReference.copy",
+        "title": "Copy Code Reference"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "copyCodeReference.copy",
+        "key": "alt+3",
+        "when": "editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "tsc -p ./",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "@types/vscode": "^1.70.0",
+    "typescript": "^5.0.0"
+  }
+}
