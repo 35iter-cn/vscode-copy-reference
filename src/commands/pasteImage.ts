@@ -3,12 +3,7 @@ import { execSync } from 'child_process';
 import { readClipboardImage } from '../clipboard/reader';
 
 export async function pasteImage(outputChannel: vscode.OutputChannel): Promise<void> {
-  outputChannel.appendLine(`[pasteImage] triggered, remoteName: ${vscode.env.remoteName}`);
-
-  if (vscode.env.remoteName !== 'wsl') {
-    vscode.window.setStatusBarMessage('Paste image is only supported in WSL Remote', 3000);
-    return;
-  }
+  outputChannel.appendLine(`[pasteImage] triggered, remoteName: ${vscode.env.remoteName}, platform: ${process.platform}`);
 
   const activeTerminal = vscode.window.activeTerminal;
   if (!activeTerminal) {
@@ -24,6 +19,11 @@ export async function pasteImage(outputChannel: vscode.OutputChannel): Promise<v
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('No image in clipboard')) {
       vscode.window.setStatusBarMessage('No image in clipboard', 3000);
+      return;
+    }
+
+    if (message.includes('Unsupported platform')) {
+      vscode.window.setStatusBarMessage('Paste image not supported on this platform', 3000);
       return;
     }
 
