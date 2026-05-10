@@ -12,7 +12,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:copyCodeReference.copy"
+    "onCommand:copyCodeReference.copy",
+    "onCommand:copyCodeReference.pasteImage"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -20,6 +21,10 @@
       {
         "command": "copyCodeReference.copy",
         "title": "Copy Code Reference"
+      },
+      {
+        "command": "copyCodeReference.pasteImage",
+        "title": "Paste Image Reference"
       }
     ],
     "keybindings": [
@@ -27,6 +32,10 @@
         "command": "copyCodeReference.copy",
         "key": "alt+3",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "copyCodeReference.pasteImage",
+        "key": "alt+4"
       }
     ]
   },
