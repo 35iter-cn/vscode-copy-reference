@@ -1,7 +1,7 @@
 {
-  "name": "copy-code-reference",
-  "displayName": "Copy @file Reference",
-  "description": "Copy @file:line-range references to clipboard",
+  "name": "send-at-reference",
+  "displayName": "Send @ Reference",
+  "description": "Copy @file:line-range references and paste images to terminal",
   "version": "0.1.2",
   "publisher": "manooog",
   "repository": {
@@ -46,7 +46,7 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "clean_install": "rm -f copy-code-reference-*.vsix && npm run compile && npx vsce package && cursor --force --install-extension copy-code-reference-*.vsix"
+    "clean_install": "rm -f send-at-reference-*.vsix && npm run compile && npx vsce package && cursor --force --install-extension send-at-reference-*.vsix"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",

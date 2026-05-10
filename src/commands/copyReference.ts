@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
+import * as os from 'os';
 
 function execPromise(command: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
@@ -13,26 +14,71 @@ function execPromise(command: string): Promise<{ stdout: string; stderr: string 
   });
 }
 
+async function getProcessName(pid: number): Promise<string | null> {
+  const platform = os.platform();
+  try {
+    if (platform === 'win32') {
+      const { stdout } = await execPromise(
+        `powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}' | Select-Object -ExpandProperty Name"`
+      );
+      return stdout.trim().toLowerCase() || null;
+    } else {
+      // Linux & macOS
+      const { stdout } = await execPromise(`ps -p ${pid} -o comm=`);
+      return stdout.trim().toLowerCase() || null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+async function getChildProcessNames(pid: number): Promise<string[]> {
+  const platform = os.platform();
+  try {
+    if (platform === 'win32') {
+      const { stdout } = await execPromise(
+        `powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'ParentProcessId=${pid}' | Select-Object -ExpandProperty Name"`
+      );
+      return stdout
+        .trim()
+        .split('\n')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
+    } else if (platform === 'darwin') {
+      // macOS BSD ps does not support --ppid, use pgrep (available by default)
+      const { stdout } = await execPromise(`pgrep -P ${pid} -l`);
+      return stdout
+        .trim()
+        .split('\n')
+        .map(line => line.split(/\s+/).slice(1).join(' ').trim().toLowerCase())
+        .filter(Boolean);
+    } else {
+      // Linux (GNU ps)
+      const { stdout } = await execPromise(`ps --ppid ${pid} -o comm=`);
+      return stdout
+        .trim()
+        .split('\n')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
+    }
+  } catch {
+    return [];
+  }
+}
+
 async function isClaudeTerminal(terminal: vscode.Terminal): Promise<boolean> {
   const pid = await terminal.processId;
   if (!pid) {
     return false;
   }
-  try {
-    // Check the terminal process itself
-    const { stdout: selfStdout } = await execPromise(`ps -p ${pid} -o comm=`);
-    const selfName = selfStdout.trim();
-    if (selfName === 'claude') {
-      return true;
-    }
 
-    // Check direct child processes
-    const { stdout: childrenStdout } = await execPromise(`ps --ppid ${pid} -o comm=`);
-    const childNames = childrenStdout.trim().split('\n').map(s => s.trim()).filter(Boolean);
-    return childNames.includes('claude');
-  } catch {
-    return false;
+  const selfName = await getProcessName(pid);
+  if (selfName === 'claude') {
+    return true;
   }
+
+  const childNames = await getChildProcessNames(pid);
+  return childNames.includes('claude');
 }
 
 export async function copyReference(): Promise<void> {
