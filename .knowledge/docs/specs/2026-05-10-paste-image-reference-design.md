@@ -42,6 +42,81 @@ Extension Host (WSL)
 
 **Verification Result**: Successfully read a 131KB PNG from Windows clipboard via `powershell.exe`, transferred it through `/mnt/c/...` to `/tmp/`, and confirmed file integrity.
 
+### Minimal Implementation (Verified)
+
+```javascript
+const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+function execPromise(command) {
+  return new Promise((resolve, reject) => {
+    exec(command, { encoding: 'buffer', maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        reject({ error, stdout, stderr });
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
+
+async function readClipboardImageFromWSL() {
+  const psScript = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
+  $img = [System.Windows.Forms.Clipboard]::GetImage()
+  $tempFile = [System.IO.Path]::GetTempFileName() + ".png"
+  $img.Save($tempFile)
+  Write-Output "OK:$tempFile"
+} else {
+  Write-Output "NO_IMAGE"
+}
+`;
+
+  // Write PowerShell script to a temp file to avoid quoting issues
+  const psFile = path.join(os.tmpdir(), 'read-clipboard.ps1');
+  fs.writeFileSync(psFile, psScript, 'utf8');
+
+  const { stdout } = await execPromise(
+    `powershell.exe -ExecutionPolicy Bypass -File "${psFile}"`
+  );
+  fs.unlinkSync(psFile);
+
+  // PowerShell in WSL outputs UTF-16LE with BOM
+  let result;
+  if (stdout.length >= 2 && stdout[0] === 0xFF && stdout[1] === 0xFE) {
+    result = stdout.toString('utf16le', 2).trim();
+  } else {
+    result = stdout.toString('utf16le').trim();
+  }
+
+  if (result === 'NO_IMAGE') {
+    throw new Error('No image in clipboard');
+  }
+
+  const windowsTempFile = result.substring(3); // Strip "OK:" prefix
+
+  // Convert Windows path to WSL path
+  const { stdout: wslPathOut } = await execPromise(`wslpath -u '${windowsTempFile}'`);
+  const wslPath = wslPathOut.toString().trim();
+
+  // Read image from Windows filesystem
+  const imageBuffer = fs.readFileSync(wslPath);
+
+  // Save to WSL /tmp
+  const wslTempFile = path.join(os.tmpdir(), `screenshot-${Date.now()}.png`);
+  fs.writeFileSync(wslTempFile, imageBuffer);
+
+  // Clean up Windows temp file
+  await execPromise(`powershell.exe -Command "Remove-Item '${windowsTempFile}'"`);
+
+  return { buffer: imageBuffer, path: wslTempFile };
+}
+```
+
 ## File Naming & Format
 
 - **Filename**: `screenshot-{timestamp}.{ext}`
