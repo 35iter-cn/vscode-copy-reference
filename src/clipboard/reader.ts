@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as vscode from 'vscode';
 import { WslClipboardReader } from './wsl-reader';
 import { MacOSClipboardReader } from './macos-reader';
+import { WindowsClipboardReader } from './windows-reader';
 
 export interface ClipboardReader {
   read(outputChannel: vscode.OutputChannel): Promise<string>;
@@ -20,6 +21,7 @@ export function createClipboardReader(): ClipboardReader {
   }
   switch (process.platform) {
     case 'darwin': return new MacOSClipboardReader();
+    case 'win32': return new WindowsClipboardReader();
     default:
       throw new Error(`Unsupported platform: ${process.platform}`);
   }
