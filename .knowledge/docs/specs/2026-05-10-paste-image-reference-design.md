@@ -85,11 +85,9 @@ if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
   );
   fs.unlinkSync(psFile);
 
-  // PowerShell in WSL outputs UTF-16LE with BOM
-  let result;
-  if (stdout.length >= 2 && stdout[0] === 0xFF && stdout[1] === 0xFE) {
-    result = stdout.toString('utf16le', 2).trim();
-  } else {
+  // PowerShell output encoding varies; try utf8 first, then fallback
+  let result = stdout.toString('utf8').trim();
+  if (!result.startsWith('OK:') && result !== 'NO_IMAGE') {
     result = stdout.toString('utf16le').trim();
   }
 
