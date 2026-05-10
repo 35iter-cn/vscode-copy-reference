@@ -20,9 +20,17 @@ async function isClaudeTerminal(terminal: vscode.Terminal): Promise<boolean> {
     return false;
   }
   try {
-    const { stdout } = await execPromise(`ps -p ${pid} -o comm=`);
-    const processName = stdout.trim();
-    return processName === 'claude';
+    // Check the terminal process itself
+    const { stdout: selfStdout } = await execPromise(`ps -p ${pid} -o comm=`);
+    const selfName = selfStdout.trim();
+    if (selfName === 'claude') {
+      return true;
+    }
+
+    // Check direct child processes
+    const { stdout: childrenStdout } = await execPromise(`ps --ppid ${pid} -o comm=`);
+    const childNames = childrenStdout.trim().split('\n').map(s => s.trim()).filter(Boolean);
+    return childNames.includes('claude');
   } catch {
     return false;
   }
