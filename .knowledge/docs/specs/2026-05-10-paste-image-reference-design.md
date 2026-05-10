@@ -26,21 +26,21 @@ Add a new command `copyCodeReference.pasteImage` bound to `Alt+4`. When triggere
 
 ## WSL Remote Detailed Flow (Verified)
 
-The Extension Host runs inside WSL. The Windows clipboard is not directly accessible from WSL, so we leverage WSL's Windows Interop to call PowerShell:
+The Extension Host runs inside WSL. The Windows clipboard is not directly accessible from WSL, so we leverage WSL's Windows Interop to call PowerShell. The image is transferred as base64 via stdout — no temporary files on Windows, no `/mnt/c/` access:
 
 ```
 Extension Host (WSL)
   ├─ child_process.spawn('powershell.exe', ['-File', 'read-clipboard.ps1'])
   │     ├─ PowerShell: [System.Windows.Forms.Clipboard]::GetImage()
-  │     ├─ PowerShell: Save to Windows %TEMP%
-  │     └─ PowerShell: Output the Windows file path
-  ├─ exec('wslpath -u <windows-path>') → /mnt/c/...
-  ├─ fs.readFileSync('/mnt/c/...') → Buffer
+  │     ├─ PowerShell: Convert to base64 string
+  │     └─ PowerShell: Output "OK:<base64>" to stdout
+  ├─ stdout.toString('utf8') → "OK:<base64>"
+  ├─ Buffer.from(base64, 'base64') → Buffer
   ├─ fs.writeFileSync('/tmp/screenshot-{ts}.png', buffer)
   └─ vscode.commands.executeCommand('type', { text: '@/tmp/...' })
 ```
 
-**Verification Result**: Successfully read a 131KB PNG from Windows clipboard via `powershell.exe`, transferred it through `/mnt/c/...` to `/tmp/`, and confirmed file integrity.
+**Verification Result**: Successfully read a 132KB PNG from Windows clipboard via `powershell.exe`, transferred as base64 through stdout, decoded to Buffer, and saved to `/tmp/`. File integrity confirmed (132534 bytes in = 132534 bytes out).
 
 ### Minimal Implementation (Verified)
 
@@ -52,12 +52,9 @@ const os = require('os');
 
 function execPromise(command) {
   return new Promise((resolve, reject) => {
-    exec(command, { encoding: 'buffer', maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        reject({ error, stdout, stderr });
-      } else {
-        resolve({ stdout, stderr });
-      }
+    exec(command, { encoding: 'buffer', maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) reject({ error, stdout, stderr });
+      else resolve({ stdout, stderr });
     });
   });
 }
@@ -68,15 +65,14 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
   $img = [System.Windows.Forms.Clipboard]::GetImage()
-  $tempFile = [System.IO.Path]::GetTempFileName() + ".png"
-  $img.Save($tempFile)
-  Write-Output "OK:$tempFile"
+  $stream = New-Object System.IO.MemoryStream
+  $img.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+  $bytes = $stream.ToArray()
+  Write-Output "OK:$([Convert]::ToBase64String($bytes))"
 } else {
   Write-Output "NO_IMAGE"
-}
-`;
+}`;
 
-  // Write PowerShell script to a temp file to avoid quoting issues
   const psFile = path.join(os.tmpdir(), 'read-clipboard.ps1');
   fs.writeFileSync(psFile, psScript, 'utf8');
 
@@ -85,33 +81,19 @@ if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
   );
   fs.unlinkSync(psFile);
 
-  // PowerShell output encoding varies; try utf8 first, then fallback
-  let result = stdout.toString('utf8').trim();
-  if (!result.startsWith('OK:') && result !== 'NO_IMAGE') {
-    result = stdout.toString('utf16le').trim();
-  }
+  const result = stdout.toString('utf8').trim();
 
   if (result === 'NO_IMAGE') {
     throw new Error('No image in clipboard');
   }
 
-  const windowsTempFile = result.substring(3); // Strip "OK:" prefix
+  const base64 = result.substring(3); // Strip "OK:" prefix
+  const buffer = Buffer.from(base64, 'base64');
 
-  // Convert Windows path to WSL path
-  const { stdout: wslPathOut } = await execPromise(`wslpath -u '${windowsTempFile}'`);
-  const wslPath = wslPathOut.toString().trim();
-
-  // Read image from Windows filesystem
-  const imageBuffer = fs.readFileSync(wslPath);
-
-  // Save to WSL /tmp
   const wslTempFile = path.join(os.tmpdir(), `screenshot-${Date.now()}.png`);
-  fs.writeFileSync(wslTempFile, imageBuffer);
+  fs.writeFileSync(wslTempFile, buffer);
 
-  // Clean up Windows temp file
-  await execPromise(`powershell.exe -Command "Remove-Item '${windowsTempFile}'"`);
-
-  return { buffer: imageBuffer, path: wslTempFile };
+  return { buffer, path: wslTempFile };
 }
 ```
 
@@ -174,7 +156,7 @@ No new npm dependencies. The implementation relies on:
 ## Security Considerations
 
 - PowerShell scripts are executed via `-File` with `-ExecutionPolicy Bypass`. Scripts are generated dynamically and saved to the system's temp directory. No user input is interpolated into the script to prevent injection.
-- Temporary files in Windows `%TEMP%` are cleaned up immediately after reading.
+- Image data is transferred as base64 via stdout; no temporary files are created on Windows.
 - The `type` command injects text into the focused element. We assume the user intentionally triggered the command via `Alt+4`.
 
 ## Open Questions / Future Work
