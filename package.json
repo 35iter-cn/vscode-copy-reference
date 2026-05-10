@@ -2,8 +2,12 @@
   "name": "copy-code-reference",
   "displayName": "Copy @file Reference",
   "description": "Copy @file:line-range references to clipboard",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "publisher": "manooog",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/35iter-cn/vscode-copy-reference"
+  },
   "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.75.0"
@@ -40,9 +44,9 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "tsc -p ./",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "clean_install": "rm -f copy-code-reference-*.vsix && npm run compile && npx vsce package && cursor --force --install-extension copy-code-reference-*.vsix"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",

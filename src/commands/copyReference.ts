@@ -1,5 +1,32 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { exec } from 'child_process';
+
+function execPromise(command: string): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    exec(command, { encoding: 'utf8' }, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
+
+async function isClaudeTerminal(terminal: vscode.Terminal): Promise<boolean> {
+  const pid = await terminal.processId;
+  if (!pid) {
+    return false;
+  }
+  try {
+    const { stdout } = await execPromise(`ps -p ${pid} -o comm=`);
+    const processName = stdout.trim();
+    return processName === 'claude';
+  } catch {
+    return false;
+  }
+}
 
 export async function copyReference(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
@@ -37,5 +64,11 @@ export async function copyReference(): Promise<void> {
     await vscode.env.clipboard.writeText(reference);
   } catch {
     // Silently ignore clipboard errors
+  }
+
+  // Send to active terminal if it's running Claude Code CLI
+  const activeTerminal = vscode.window.activeTerminal;
+  if (activeTerminal && await isClaudeTerminal(activeTerminal)) {
+    activeTerminal.sendText(reference, false);
   }
 }

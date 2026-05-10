@@ -17,6 +17,12 @@ A minimal VS Code/Cursor extension that copies `@file#Lline-range` references to
 
 The extension has no test suite and no linting configuration.
 
+To perform a clean install (rebuild and reinstall to Cursor), run all three steps in sequence:
+
+```bash
+rm -f copy-code-reference-*.vsix && npm run compile && npx vsce package && cursor --force --install-extension copy-code-reference-*.vsix
+```
+
 ## Architecture
 
 The entire extension lives in a single file:

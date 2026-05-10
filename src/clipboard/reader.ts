@@ -2,12 +2,12 @@ import { exec } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as vscode from 'vscode';
 
-function execPromise(command: string): Promise<{ stdout: Buffer; stderr: Buffer }> {
-  return new Promise((resolve, reject) => {
+function execPromise(command: string): Promise<{ stdout: Buffer; stderr: Buffer; error?: Error }> {
+  return new Promise((resolve) => {
     exec(command, { encoding: 'buffer', maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) reject({ error, stdout, stderr });
-      else resolve({ stdout, stderr });
+      resolve({ stdout, stderr, error: error || undefined });
     });
   });
 }
@@ -17,9 +17,10 @@ export interface ClipboardImageResult {
   path: string;
 }
 
-export async function readClipboardImage(): Promise<ClipboardImageResult> {
-  const psScript = `
-Add-Type -AssemblyName System.Windows.Forms
+export async function readClipboardImage(outputChannel: vscode.OutputChannel): Promise<ClipboardImageResult> {
+  outputChannel.appendLine('[pasteImage] Starting clipboard image read...');
+
+  const psScript = `Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
   $img = [System.Windows.Forms.Clipboard]::GetImage()
@@ -31,39 +32,39 @@ if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
   Write-Output "NO_IMAGE"
 }`;
 
-  const psFile = path.join(os.tmpdir(), 'read-clipboard.ps1');
-  fs.writeFileSync(psFile, psScript, 'utf8');
+  const encodedCommand = Buffer.from(psScript, 'utf16le').toString('base64');
 
-  let stdout: Buffer;
-  try {
-    const result = await execPromise(
-      `powershell.exe -ExecutionPolicy Bypass -File "${psFile}"`
-    );
-    stdout = result.stdout;
-  } finally {
-    // Always clean up the temp script, even on error
-    try {
-      fs.unlinkSync(psFile);
-    } catch {
-      // Ignore cleanup errors
-    }
+  const { stdout, stderr, error } = await execPromise(
+    `powershell.exe -NoLogo -NonInteractive -EncodedCommand ${encodedCommand}`
+  );
+  if (error) {
+    outputChannel.appendLine(`[pasteImage] exec error: ${error.message}`);
   }
 
-  const result = stdout.toString('utf8').trim();
+  const output = stdout.toString('utf8');
+  outputChannel.appendLine(`[pasteImage] stdout length: ${stdout.length}, stderr length: ${stderr.length}`);
+  if (stderr.length > 0) {
+    outputChannel.appendLine(`[pasteImage] stderr: ${stderr.toString('utf8').slice(0, 500)}`);
+  }
 
-  if (result === 'NO_IMAGE') {
+  const okMatch = output.match(/OK:([A-Za-z0-9+/=]+)/);
+  const noImage = output.includes('NO_IMAGE');
+
+  if (noImage) {
     throw new Error('No image in clipboard');
   }
 
-  if (!result.startsWith('OK:')) {
-    throw new Error('Unexpected PowerShell output: ' + result.slice(0, 100));
+  if (!okMatch) {
+    outputChannel.appendLine(`[pasteImage] stdout text: ${output.slice(0, 300)}`);
+    throw new Error('Unexpected PowerShell output (see Output panel for full details)');
   }
 
-  const base64 = result.substring(3); // Strip "OK:" prefix
+  const base64 = okMatch[1];
   const buffer = Buffer.from(base64, 'base64');
 
   const wslTempFile = path.join(os.tmpdir(), `screenshot-${Date.now()}.png`);
   fs.writeFileSync(wslTempFile, buffer);
+  outputChannel.appendLine(`[pasteImage] Image saved to ${wslTempFile} (${buffer.length} bytes)`);
 
   return { buffer, path: wslTempFile };
 }
