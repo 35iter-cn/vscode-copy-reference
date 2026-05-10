@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { exec } from 'child_process';
 
 function execPromise(command: string): Promise<{ stdout: string; stderr: string }> {
@@ -49,20 +48,14 @@ export async function copyReference(): Promise<void> {
   const startLine = selection.start.line + 1;
   const endLine = selection.end.line + 1;
 
-  // Determine file path: relative to workspace root if possible, else absolute
-  let filePath: string;
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-  if (workspaceFolder) {
-    filePath = path.relative(workspaceFolder.uri.fsPath, document.uri.fsPath);
-    // Normalize Windows backslashes to forward slashes for consistency
-    filePath = filePath.replace(/\\/g, '/');
-  } else {
-    filePath = document.uri.fsPath.replace(/\\/g, '/');
-  }
+  // Always use absolute path, normalized to forward slashes
+  const filePath = document.uri.fsPath.replace(/\\/g, '/');
 
-  // Format: @file#Lline or @file#Lstart-end
+  // Format: @file, @file#Lline, or @file#Lstart-end
   let reference: string;
-  if (startLine === endLine) {
+  if (selection.isEmpty) {
+    reference = `@${filePath}`;
+  } else if (startLine === endLine) {
     reference = `@${filePath}#L${startLine}`;
   } else {
     reference = `@${filePath}#L${startLine}-${endLine}`;
