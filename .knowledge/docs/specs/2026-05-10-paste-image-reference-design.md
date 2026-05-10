@@ -4,7 +4,7 @@
 
 ## Scope
 
-This spec covers a single, well-defined scenario:
+Single scenario only:
 
 - **VS Code runs on Windows host**
 - **Connected to WSL (Linux subsystem) via Remote-WSL**
@@ -14,18 +14,33 @@ No support for Local Windows, macOS, Linux, or SSH Remote in this iteration.
 
 ## Overview
 
-Add a new command `copyCodeReference.pasteImage` bound to `Alt+4`. When triggered, the extension reads an image from the **Windows host clipboard**, saves it to the WSL temp directory (`/tmp`), and types an `@/path/to/image` reference into the currently focused input (typically Claude Code TUI in the VS Code terminal).
+Add a new command `copyCodeReference.pasteImage` bound to `Alt+4`. When triggered, the extension reads an image from the **Windows host clipboard**, saves it to the WSL temp directory (`/tmp`), and sends the `@/path/to/image` reference to the **active integrated terminal** via `Terminal.sendText()` — no need for the terminal to have focus.
 
 ## User Flow
 
-1. User copies an image to the **Windows clipboard** (e.g., screenshot tool, browser, image editor).
-2. User focuses the TUI input box (e.g., Claude Code in VS Code terminal).
-3. User presses `Alt+4`.
-4. Extension calls PowerShell via WSL Windows Interop to read the Windows clipboard.
-5. Image is transferred as base64 via stdout, decoded, and saved to `/tmp/screenshot-{timestamp}.png`.
-6. Extension types `@/tmp/screenshot-{timestamp}.png` into the focused input.
+1. User copies an image to the **Windows clipboard** (screenshot tool, browser, image editor, etc.).
+2. User presses `Alt+4` from anywhere in VS Code (editor, terminal, sidebar — global keybinding).
+3. Extension calls PowerShell via WSL Windows Interop to read the Windows clipboard.
+4. Image is transferred as base64 via stdout, decoded, and saved to `/tmp/screenshot-{timestamp}.png`.
+5. Extension calls `vscode.window.activeTerminal.sendText('@/tmp/screenshot-{timestamp}.png')`.
+6. The reference appears in the active terminal's input line (Claude Code TUI or any other shell).
 
-## Implementation Flow
+## Keybinding Strategy
+
+The keybinding is registered **without a `when` clause** in `package.json`, making it global:
+
+```json
+{
+  "command": "copyCodeReference.pasteImage",
+  "key": "alt+4"
+}
+```
+
+This ensures `Alt+4` is evaluated by VS Code's keybinding system regardless of which panel has focus. VS Code evaluates its own keybindings first; only if no match is found does the key get sent to the shell.
+
+**Note**: If the user's shell (e.g., fish, zsh) has `Alt+4` bound, and VS Code's keybinding somehow does not take precedence, the user may need to unbind it in their shell config or override in their personal `keybindings.json`.
+
+## Clipboard Read Flow
 
 The Extension Host runs inside WSL. The Windows clipboard is not directly accessible, so we leverage WSL's Windows Interop to call PowerShell. The image is transferred as base64 via stdout — no temporary files on Windows, no `/mnt/c/` access:
 
@@ -38,7 +53,7 @@ Extension Host (WSL)
   ├─ stdout.toString('utf8') → "OK:<base64>"
   ├─ Buffer.from(base64, 'base64') → Buffer
   ├─ fs.writeFileSync('/tmp/screenshot-{ts}.png', buffer)
-  └─ vscode.commands.executeCommand('type', { text: '@/tmp/...' })
+  └─ vscode.window.activeTerminal?.sendText('@/tmp/...')
 ```
 
 ## Verification Result
@@ -100,22 +115,27 @@ if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
 }
 ```
 
+## Terminal SendText Behavior
+
+`vscode.window.activeTerminal.sendText(text)` sends text to the terminal's **stdin** regardless of whether the terminal currently has focus. The text appears in the terminal's input line when the user next focuses it or if it is already visible.
+
+- `activeTerminal` returns the terminal that currently has focus or most recently had focus.
+- `sendText` does not require focus; it writes directly to the pty process.
+- No newline is appended by default (`addNewLine` defaults to `false`), matching the desired behavior of inserting the reference without submitting.
+
 ## File Naming & Format
 
 - **Filename**: `screenshot-{timestamp}.png`
-- **Timestamp**: `Date.now()` (millisecond precision, simple and collision-resistant)
+- **Timestamp**: `Date.now()` (millisecond precision)
 - **Format**: PNG (PowerShell `System.Drawing.Imaging.ImageFormat::Png`)
 - **Save Location**: `os.tmpdir()` → `/tmp` in WSL
-
-## Pasting Mechanism
-
-Use `vscode.commands.executeCommand('type', { text: '@/path/to/image.png' })` to simulate keyboard input into the currently focused element. When the terminal (Claude Code TUI) has focus, the text appears directly in the TUI input box.
 
 ## Error Handling
 
 | Scenario | Behavior |
 |----------|----------|
 | Clipboard contains no image | `vscode.window.setStatusBarMessage('No image in clipboard', 3000)` |
+| No active terminal | `vscode.window.setStatusBarMessage('No active terminal', 3000)` |
 | Image read/save failure | Show specific error message in status bar |
 | PowerShell not available | `vscode.window.setStatusBarMessage('powershell.exe not available', 3000)` |
 
@@ -134,7 +154,7 @@ src/
 ### Module Responsibilities
 
 - **`clipboard/reader.ts`**: Calls `powershell.exe` via WSL Windows Interop, reads the Windows clipboard image as base64 via stdout, decodes to Buffer, saves to `/tmp`, returns the file path.
-- **`commands/pasteImage.ts`**: Orchestrates the flow: call `clipboard/reader.ts`, format the `@/path` reference string, execute `type` command. Shows status bar messages on errors.
+- **`commands/pasteImage.ts`**: Orchestrates the flow: call `clipboard/reader.ts`, format the `@/path` reference string, call `vscode.window.activeTerminal?.sendText()`. Shows status bar messages on errors.
 - **`commands/copyReference.ts`**: Existing `Alt+3` functionality (moved from `extension.ts`).
 - **`extension.ts`**: Registers both commands, wires up keybindings.
 
@@ -149,7 +169,7 @@ No new npm dependencies. Relies on:
 
 - PowerShell scripts are executed via `-File` with `-ExecutionPolicy Bypass`. Scripts are generated dynamically and saved to `/tmp`. No user input is interpolated into the script to prevent injection.
 - Image data is transferred as base64 via stdout; no temporary files are created on Windows.
-- The `type` command injects text into the focused element. We assume the user intentionally triggered the command via `Alt+4`.
+- `sendText` writes to the terminal's stdin. We assume the user intentionally triggered the command via `Alt+4`.
 
 ## Future Work
 
