@@ -26,14 +26,4 @@ Paste a clipboard image as a file path reference into the active terminal. Only 
 
 The image will be saved to a temporary file and its path (e.g., `@/tmp/image_xxx.png`) will be sent to the terminal.
 
-**Note:** If `Alt+4` does not respond when the terminal is focused, you need to manually add the following to your `settings.json`:
-
-```json
-{
-  "terminal.integrated.commandsToSkipShell": [
-    "copyCodeReference.pasteImage"
-  ]
-}
-```
-
-If you already have other commands in `commandsToSkipShell`, append `copyCodeReference.pasteImage` to the existing array instead of replacing it.
+**Note:** The extension automatically registers `copyCodeReference.pasteImage` in `terminal.integrated.commandsToSkipShell` so that `Alt+4` works when the terminal is focused. If you have custom needs, you can still override this in your `settings.json`.
