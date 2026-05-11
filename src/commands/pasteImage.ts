@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { execSync } from 'child_process';
 import { readClipboardImage } from '../clipboard/reader';
+import { sendToTerminal } from '../utils/terminal';
 
 export async function pasteImage(outputChannel: vscode.OutputChannel): Promise<void> {
   outputChannel.appendLine(`[pasteImage] triggered, remoteName: ${vscode.env.remoteName}, platform: ${process.platform}`);
@@ -14,7 +15,7 @@ export async function pasteImage(outputChannel: vscode.OutputChannel): Promise<v
   try {
     const result = await readClipboardImage(outputChannel);
     const reference = `@${result.path}`;
-    activeTerminal.sendText(reference, false);
+    await sendToTerminal(reference);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('No image in clipboard')) {
