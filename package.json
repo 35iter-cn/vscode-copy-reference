@@ -21,6 +21,11 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "configurationDefaults": {
+      "terminal.integrated.commandsToSkipShell": [
+        "copyCodeReference.pasteImage"
+      ]
+    },
     "commands": [
       {
         "command": "copyCodeReference.copy",
