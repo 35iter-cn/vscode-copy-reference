@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import * as os from 'os';
+import { sendToTerminal } from '../utils/terminal';
 
 function execPromise(command: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
@@ -116,6 +117,6 @@ export async function copyReference(): Promise<void> {
   // Send to active terminal if it's running Claude Code CLI
   const activeTerminal = vscode.window.activeTerminal;
   if (activeTerminal && await isClaudeTerminal(activeTerminal)) {
-    activeTerminal.sendText(reference, false);
+    await sendToTerminal(reference, { appendSpace: true });
   }
 }
