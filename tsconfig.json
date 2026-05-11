@@ -12,5 +12,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "vscode"]
   },
-  "exclude": ["node_modules", ".vscode-test"]
+  "exclude": ["node_modules", ".vscode-test", "**/__mocks__", "**/__tests__"]
 }
