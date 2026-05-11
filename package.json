@@ -2,7 +2,7 @@
   "name": "send-at-reference",
   "displayName": "Send @ Reference",
   "description": "Copy @file:line-range references and paste images to terminal",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "manooog",
   "repository": {
     "type": "git",
